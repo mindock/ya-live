@@ -37,6 +37,7 @@ async function getAllQuizFromBank(args: { quiz_id: string }) {
 
 async function saveDeadStatus({ festivalId }: { festivalId: string }) {
   try {
+    const start = new Date().getTime();
     const festivalSnap = await FirebaseAdmin.getInstance()
       .Firestore.collection('quiz')
       .doc(festivalId)
@@ -64,8 +65,74 @@ async function saveDeadStatus({ festivalId }: { festivalId: string }) {
       currnetRoundParticipantsSnap.docs.length - deadParticipants.length;
     await festivalSnap.ref.update({ alive_participants: aliveParticipantCount });
 
+    const elapsed = new Date().getTime() - start;
+    console.log('##filter: ', elapsed);
+
     return { ...festivalData, alive_participants: aliveParticipantCount };
   } catch (err) {
+    return null;
+  }
+}
+
+// alive 오름차순 currentQuizID 오름차순 select 오름차순
+async function saveDeadStatus2({ festivalId }: { festivalId: string }) {
+  try {
+    const start = new Date().getTime();
+    const festivalSnap = await FirebaseAdmin.getInstance()
+      .Firestore.collection('quiz')
+      .doc(festivalId)
+      .get();
+    const festivalData = festivalSnap.data() as QuizOperation;
+
+    const deadParticipanBytLessAnswer = await festivalSnap.ref
+      .collection('participants')
+      .where('alive', '==', true)
+      .where('currentQuizID', '==', festivalData.quiz_id)
+      .where('select', '<', festivalData.quiz_correct_answer)
+      .get();
+    console.log('lessThan: ', deadParticipanBytLessAnswer.docs.length);
+    const deadParticipantByMoreAnswer = await festivalSnap.ref
+      .collection('participants')
+      .where('alive', '==', true)
+      .where('currentQuizID', '==', festivalData.quiz_id)
+      .where('select', '>', festivalData.quiz_correct_answer)
+      .get();
+    console.log('moreThan: ', deadParticipantByMoreAnswer.docs.length);
+
+    const deadParticipants = deadParticipanBytLessAnswer.docs.concat(
+      deadParticipantByMoreAnswer.docs,
+    );
+
+    // alive=false 처리
+    const deadReqeusts = deadParticipants.map(
+      (deadParticipant: FirebaseFirestore.QueryDocumentSnapshot) =>
+        deadParticipant.ref.update({ ...deadParticipant.data(), alive: false }),
+    );
+    await Promise.all(deadReqeusts);
+
+    // quiz에 alive_participants 업데이트
+    const alivePArticipants = await festivalSnap.ref
+      .collection('participants')
+      .where('alive', '==', true)
+      .where('currentQuizID', '==', festivalData.quiz_id)
+      .where('select', '==', festivalData.quiz_correct_answer)
+      .get();
+
+    const aliveParticipantCount = alivePArticipants.docs.length;
+    console.log('alive: ', aliveParticipantCount);
+
+    const festivalUpdatedData: QuizOperation = {
+      ...festivalData,
+      alive_participants: aliveParticipantCount,
+    };
+    await festivalSnap.ref.update(festivalUpdatedData);
+
+    const elapsed = new Date().getTime() - start;
+    console.log('##filter: ', elapsed);
+
+    return { ...festivalData, alive_participants: aliveParticipantCount };
+  } catch (err) {
+    console.log(err);
     return null;
   }
 }
@@ -102,5 +169,6 @@ export default {
   updateOperationInfo,
   getAllQuizFromBank,
   saveDeadStatus,
+  saveDeadStatus2,
   reviveCurrentRoundParticipants,
 };

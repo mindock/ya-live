@@ -42,4 +42,33 @@ async function updateParticipant(args: {
   }
 }
 
-export default { participantFind, updateParticipant };
+async function addBulkParticipant(args: { quiz_id: string; currentQuizID: string }) {
+  try {
+    const ref = FirebaseAdmin.getInstance()
+      .Firestore.collection('quiz')
+      .doc(args.quiz_id)
+      .collection('participants');
+
+    const batch = FirebaseAdmin.getInstance().Firestore.batch();
+    for (let i = 1; i <= 130; i++) {
+      const iString = i.toString();
+      batch.set(ref.doc(iString), {
+        alive: true,
+        currentQuizID: args.currentQuizID,
+        displayName: iString,
+        id: iString,
+        join: '2019-12-09T16:04:49.878+09:00',
+        select: Math.floor(Math.random() * (4 - 1)) + 1,
+      });
+    }
+
+    await batch.commit();
+
+    return { reuslt: true };
+  } catch (err) {
+    console.log('[bulk 데이터 삽입 실패] ', err);
+    return { result: false };
+  }
+}
+
+export default { participantFind, updateParticipant, addBulkParticipant: addBulkParticipant };

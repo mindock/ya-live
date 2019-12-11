@@ -61,6 +61,32 @@ async function updateParticipant({
   return res.json(resp);
 }
 
+async function addBulkParticipant({
+  query,
+  body,
+  res,
+}: {
+  query: NextApiRequest['query'];
+  body: { currentQuizId: string };
+  res: NextApiResponse;
+}) {
+  const quizId = getStringValueFromQuery({ query, field: 'quiz_id' });
+  const currentQuizId = body.currentQuizId;
+  if (!quizId) {
+    return res.status(400).end();
+  }
+  // db 조회
+  const resp = await participantsModel.addBulkParticipant({
+    quiz_id: quizId,
+    currentQuizID: currentQuizId,
+  });
+  log(resp);
+  if (!resp) {
+    return res.status(500).end();
+  }
+  return res.json(resp);
+}
+
 async function updateOperationInfo({
   query,
   body,
@@ -141,6 +167,35 @@ async function calculateRound({
   return res.json(resp);
 }
 
+/** 정산하기 */
+async function calculateRound2({
+  query,
+  res,
+}: {
+  query: NextApiRequest['query'];
+  res: NextApiResponse;
+}) {
+  const festivalId = getStringValueFromQuery({ query, field: 'quiz_id' });
+  if (festivalId === undefined) {
+    return res.status(400).end();
+  }
+
+  const { result, data } = validateParamWithData<{ id: string }>(
+    { id: festivalId },
+    JSCQuizOperation,
+  );
+  if (!result) {
+    return res.status(400).end();
+  }
+
+  const resp = await quizOpsModel.saveDeadStatus2({ festivalId: data.id });
+  log('[calculateRound]: ', resp);
+  if (resp === null) {
+    return res.status(500).end();
+  }
+  return res.json(resp);
+}
+
 /** 부활하기 - 많은 참가자가 죽었을 때, 현재 라운드 참가자 모두 부활 */
 async function reviveCurrentRoundParticipants({
   query,
@@ -173,8 +228,10 @@ async function reviveCurrentRoundParticipants({
 export default {
   findParticipant,
   updateParticipant,
+  addBulkParticipant,
   updateOperationInfo,
   findAllQuizFromBank,
   calculateRound,
+  calculateRound2,
   reviveCurrentRoundParticipants,
 };
